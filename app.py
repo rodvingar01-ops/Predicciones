@@ -10,10 +10,21 @@ st.markdown("---")
 # --- CARGA DE DATOS OPTIMIZADA ---
 @st.cache_data
 def cargar_datos():
-    try:
-        return pd.read_csv('archive/matches.csv', low_memory=False)
-    except FileNotFoundError:
-        return pd.read_csv('matches.csv', low_memory=False)
+    # Intenta buscar el archivo ZIP (compatible con Linux/GitHub y Windows)
+    for nombre_zip in ['matches.zip', 'Matches.zip']:
+        try:
+            return pd.read_csv(nombre_zip, low_memory=False)
+        except FileNotFoundError:
+            continue
+            
+    # Respaldo por si se ejecuta localmente con el CSV suelto
+    for nombre_csv in ['archive/matches.csv', 'Matches.csv', 'matches.csv']:
+        try:
+            return pd.read_csv(nombre_csv, low_memory=False)
+        except FileNotFoundError:
+            continue
+            
+    raise FileNotFoundError("No se encontró ningún archivo de datos (matches.zip o matches.csv).")
 
 df = cargar_datos()
 
@@ -130,7 +141,6 @@ if st.button("📊 Analizar Partido", type="primary"):
             t_vis = df[df['AwayTeam'] == equipo_visita]['AwayTarget'].mean()
             total_tiros = t_loc + t_vis
             
-            # Variables corregidas para evitar sobrescritura de cuotas
             corn_loc = df[df['HomeTeam'] == equipo_local]['HomeCorners'].mean()
             corn_vis = df[df['AwayTeam'] == equipo_visita]['AwayCorners'].mean()
             total_corners = corn_loc + corn_vis
