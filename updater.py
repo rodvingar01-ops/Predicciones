@@ -28,56 +28,69 @@ def actualizar_base():
     df = pd.read_csv('Matches.csv', low_memory=False)
     ultima_fecha = pd.to_datetime(df['MatchDate']).max()
     
-    fecha_inicio = (ultima_fecha + timedelta(days=1)).strftime('%Y-%m-%d')
-    fecha_fin = datetime.today().strftime('%Y-%m-%d')
+    # Comenzar desde el día siguiente al último partido guardado
+    fecha_actual = ultima_fecha + timedelta(days=1)
+    fecha_fin = datetime.today()
     
-    if fecha_inicio > fecha_fin:
+    if fecha_actual.date() > fecha_fin.date():
         print("La base de datos ya está al día.")
         return
 
-    url = f"https://v3.football.api-sports.io/fixtures?from={fecha_inicio}&to={fecha_fin}&status=FT"
-    response = requests.get(url, headers=HEADERS)
-    datos = response.json()
-    
     nuevos_registros = []
     
-    for match in datos.get('response', []):
-        equipo_l = match['teams']['home']['name']
-        equipo_v = match['teams']['away']['name']
-        gf_l = match['goals']['home']
-        gf_v = match['goals']['away']
+    # Bucle para consultar día por día y evitar el bloqueo de la API por falta de liga
+    while fecha_actual.date() <= fecha_fin.date():
+        fecha_str = fecha_actual.strftime('%Y-%m-%d')
+        print(f"Consultando partidos del {fecha_str}...")
         
-        if gf_l is None or gf_v is None:
-            continue
-            
-        if gf_l > gf_v: res = 'H'
-        elif gf_l < gf_v: res = 'A'
-        else: res = 'D'
+        url = f"https://v3.football.api-sports.io/fixtures?date={fecha_str}&status=FT"
+        response = requests.get(url, headers=HEADERS)
+        datos = response.json()
         
-        try:
-            elo_l_previo = df[df['HomeTeam'] == equipo_l]['HomeElo'].dropna().iloc[-1]
-        except IndexError:
-            elo_l_previo = 1500
+        # Validar si la API devuelve algún error interno
+        if datos.get('errors') and len(datos.get('errors')) > 0:
+            print(f"Error de la API en {fecha_str}:", datos.get('errors'))
+        
+        for match in datos.get('response', []):
+            equipo_l = match['teams']['home']['name']
+            equipo_v = match['teams']['away']['name']
+            gf_l = match['goals']['home']
+            gf_v = match['goals']['away']
             
-        try:
-            elo_v_previo = df[df['AwayTeam'] == equipo_v]['AwayElo'].dropna().iloc[-1]
-        except IndexError:
-            elo_v_previo = 1500
+            if gf_l is None or gf_v is None:
+                continue
+                
+            if gf_l > gf_v: res = 'H'
+            elif gf_l < gf_v: res = 'A'
+            else: res = 'D'
+            
+            try:
+                elo_l_previo = df[df['HomeTeam'] == equipo_l]['HomeElo'].dropna().iloc[-1]
+            except IndexError:
+                elo_l_previo = 1500
+                
+            try:
+                elo_v_previo = df[df['AwayTeam'] == equipo_v]['AwayElo'].dropna().iloc[-1]
+            except IndexError:
+                elo_v_previo = 1500
 
-        nuevo_elo_l, nuevo_elo_v = recalcular_elo(elo_l_previo, elo_v_previo, gf_l, gf_v)
-        
-        nuevo_partido = {
-            'Division': match['league']['name'],
-            'MatchDate': match['fixture']['date'].split('T')[0],
-            'HomeTeam': equipo_l,
-            'AwayTeam': equipo_v,
-            'FTHome': gf_l,
-            'FTAway': gf_v,
-            'FTResult': res,
-            'HomeElo': nuevo_elo_l,
-            'AwayElo': nuevo_elo_v
-        }
-        nuevos_registros.append(nuevo_partido)
+            nuevo_elo_l, nuevo_elo_v = recalcular_elo(elo_l_previo, elo_v_previo, gf_l, gf_v)
+            
+            nuevo_partido = {
+                'Division': match['league']['name'],
+                'MatchDate': match['fixture']['date'].split('T')[0],
+                'HomeTeam': equipo_l,
+                'AwayTeam': equipo_v,
+                'FTHome': gf_l,
+                'FTAway': gf_v,
+                'FTResult': res,
+                'HomeElo': nuevo_elo_l,
+                'AwayElo': nuevo_elo_v
+            }
+            nuevos_registros.append(nuevo_partido)
+            
+        # Avanzar al siguiente día
+        fecha_actual += timedelta(days=1)
         
     if nuevos_registros:
         df_nuevos = pd.DataFrame(nuevos_registros)
