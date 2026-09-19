@@ -1,14 +1,18 @@
 name: ETL Apuestas Diario
+
 on:
   schedule:
-    - cron: '0 8 * * *' 
-  workflow_dispatch: 
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 jobs:
   actualizar-datos:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
-      - name: Clonar el repositorio
+      - name: Checkout del repositorio
         uses: actions/checkout@v3
 
       - name: Configurar Python
@@ -17,16 +21,18 @@ jobs:
           python-version: '3.10'
 
       - name: Instalar dependencias
-        run: pip install pandas requests scipy
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests scipy
 
       - name: Ejecutar motor de extracción
-        env:
-          API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
         run: python updater.py
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
 
       - name: Guardar la nueva base de datos
         run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add Matches.csv
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Actualización automática de resultados" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Actualizacion automatica: Partidos nuevos" && git push)
