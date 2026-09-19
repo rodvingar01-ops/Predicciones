@@ -207,45 +207,63 @@ with tab_predictivo:
                 st.markdown(f"- 📈 **BET BUILDER:** {pick_tiros} | {pick_corners} | {pick_tarjetas}")
 
 # =========================================================
-# PESTAÑA 2: VISOR DE BASE DE DATOS (FORMA RECIENTE)
+# PESTAÑA 2: VISOR DE BASE DE DATOS (FORMA RECIENTE Y H2H)
 # =========================================================
 with tab_base_datos:
-    st.subheader("🏟️ Forma Reciente de los Equipos")
     
-    def obtener_ultimos_partidos(equipo, limite=10):
-        df_equipo = df[(df['HomeTeam'] == equipo) | (df['AwayTeam'] == equipo)].copy()
-        
-        if df_equipo.empty:
+    # 1. TABLA HEAD-TO-HEAD (CARA A CARA)
+    st.subheader("⚔️ Enfrentamientos Directos (H2H)")
+    
+    def procesar_tabla(df_filtrado):
+        if df_filtrado.empty:
             return pd.DataFrame()
             
-        df_equipo['MatchDate'] = pd.to_datetime(df_equipo['MatchDate'], errors='coerce')
-        df_equipo = df_equipo.sort_values(by='MatchDate', ascending=False).head(limite)
+        df_filtrado['MatchDate'] = pd.to_datetime(df_filtrado['MatchDate'], errors='coerce')
+        df_filtrado = df_filtrado.sort_values(by='MatchDate', ascending=False).head(10)
         
-        df_equipo['Marcador'] = df_equipo['FTHome'].fillna(0).astype(int).astype(str) + " - " + df_equipo['FTAway'].fillna(0).astype(int).astype(str)
-        df_equipo['Total Goles'] = df_equipo['FTHome'].fillna(0) + df_equipo['FTAway'].fillna(0)
-        df_equipo['Total Córners'] = df_equipo['HomeCorners'].fillna(0) + df_equipo['AwayCorners'].fillna(0)
-        df_equipo['Total Tarjetas'] = (df_equipo['HomeYellow'].fillna(0) + df_equipo['HomeRed'].fillna(0) + 
-                                       df_equipo['AwayYellow'].fillna(0) + df_equipo['AwayRed'].fillna(0))
-        df_equipo['Total Remates (Puerta)'] = df_equipo['HomeTarget'].fillna(0) + df_equipo['AwayTarget'].fillna(0)
+        df_filtrado['Marcador'] = df_filtrado['FTHome'].fillna(0).astype(int).astype(str) + " - " + df_filtrado['FTAway'].fillna(0).astype(int).astype(str)
+        df_filtrado['Total Goles'] = df_filtrado['FTHome'].fillna(0) + df_filtrado['FTAway'].fillna(0)
+        df_filtrado['Total Córners'] = df_filtrado['HomeCorners'].fillna(0) + df_filtrado['AwayCorners'].fillna(0)
+        df_filtrado['Total Tarjetas'] = (df_filtrado['HomeYellow'].fillna(0) + df_filtrado['HomeRed'].fillna(0) + 
+                                       df_filtrado['AwayYellow'].fillna(0) + df_filtrado['AwayRed'].fillna(0))
+        df_filtrado['Total Remates (Puerta)'] = df_filtrado['HomeTarget'].fillna(0) + df_filtrado['AwayTarget'].fillna(0)
         
-        df_equipo['MatchDate'] = df_equipo['MatchDate'].dt.strftime('%Y-%m-%d')
-        
+        df_filtrado['MatchDate'] = df_filtrado['MatchDate'].dt.strftime('%Y-%m-%d')
         columnas_mostrar = ['MatchDate', 'Division', 'HomeTeam', 'AwayTeam', 'Marcador', 'Total Goles', 'Total Córners', 'Total Tarjetas', 'Total Remates (Puerta)']
-        
-        return df_equipo[columnas_mostrar].rename(columns={'MatchDate': 'Fecha', 'Division': 'Liga', 'HomeTeam': 'Local', 'AwayTeam': 'Visitante'})
+        return df_filtrado[columnas_mostrar].rename(columns={'MatchDate': 'Fecha', 'Division': 'Liga', 'HomeTeam': 'Local', 'AwayTeam': 'Visitante'})
 
-    st.markdown(f"**Últimos 10 encuentros de {equipo_local} (Cualquier rival)**")
-    df_hist_local = obtener_ultimos_partidos(equipo_local)
-    if not df_hist_local.empty:
-        st.dataframe(df_hist_local.reset_index(drop=True), width='stretch')
+    # Filtrar solo partidos entre ellos
+    df_h2h = df[((df['HomeTeam'] == equipo_local) & (df['AwayTeam'] == equipo_visita)) |
+                ((df['HomeTeam'] == equipo_visita) & (df['AwayTeam'] == equipo_local))].copy()
+    
+    df_h2h_procesado = procesar_tabla(df_h2h)
+    
+    if not df_h2h_procesado.empty:
+        st.dataframe(df_h2h_procesado.reset_index(drop=True), width='stretch')
+    else:
+        st.info(f"No hay registros previos de enfrentamientos directos entre {equipo_local} y {equipo_visita}.")
+
+    st.markdown("---")
+    st.subheader("🏟️ Forma Reciente (Cualquier rival)")
+
+    # 2. TABLA EQUIPO LOCAL
+    st.markdown(f"**Últimos 10 encuentros de {equipo_local}**")
+    df_hist_local = df[(df['HomeTeam'] == equipo_local) | (df['AwayTeam'] == equipo_local)].copy()
+    df_local_procesado = procesar_tabla(df_hist_local)
+    
+    if not df_local_procesado.empty:
+        st.dataframe(df_local_procesado.reset_index(drop=True), width='stretch')
     else:
         st.info(f"No hay datos registrados para {equipo_local}.")
 
     st.markdown("---")
 
-    st.markdown(f"**Últimos 10 encuentros de {equipo_visita} (Cualquier rival)**")
-    df_hist_visita = obtener_ultimos_partidos(equipo_visita)
-    if not df_hist_visita.empty:
-        st.dataframe(df_hist_visita.reset_index(drop=True), width='stretch')
+    # 3. TABLA EQUIPO VISITANTE
+    st.markdown(f"**Últimos 10 encuentros de {equipo_visita}**")
+    df_hist_visita = df[(df['HomeTeam'] == equipo_visita) | (df['AwayTeam'] == equipo_visita)].copy()
+    df_visita_procesado = procesar_tabla(df_hist_visita)
+    
+    if not df_visita_procesado.empty:
+        st.dataframe(df_visita_procesado.reset_index(drop=True), width='stretch')
     else:
         st.info(f"No hay datos registrados para {equipo_visita}.")
