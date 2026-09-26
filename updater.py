@@ -28,7 +28,6 @@ def actualizar_base():
     df = pd.read_csv('Matches.csv', low_memory=False)
     ultima_fecha = pd.to_datetime(df['MatchDate']).max()
     
-    # Comenzar desde el día siguiente al último partido guardado
     fecha_actual = ultima_fecha + timedelta(days=1)
     fecha_fin = datetime.today()
     
@@ -38,7 +37,6 @@ def actualizar_base():
 
     nuevos_registros = []
     
-    # Bucle para consultar día por día y evitar el bloqueo de la API por falta de liga
     while fecha_actual.date() <= fecha_fin.date():
         fecha_str = fecha_actual.strftime('%Y-%m-%d')
         print(f"Consultando partidos del {fecha_str}...")
@@ -47,11 +45,16 @@ def actualizar_base():
         response = requests.get(url, headers=HEADERS)
         datos = response.json()
         
-        # Validar si la API devuelve algún error interno
         if datos.get('errors') and len(datos.get('errors')) > 0:
             print(f"Error de la API en {fecha_str}:", datos.get('errors'))
         
         for match in datos.get('response', []):
+            # Filtro exclusivo para las 5 grandes ligas europeas
+            # 39: Premier League, 140: La Liga, 135: Serie A, 78: Bundesliga, 61: Ligue 1
+            liga_id = match['league']['id']
+            if liga_id not in [39, 140, 135, 78, 61]:
+                continue
+                
             equipo_l = match['teams']['home']['name']
             equipo_v = match['teams']['away']['name']
             gf_l = match['goals']['home']
@@ -89,7 +92,6 @@ def actualizar_base():
             }
             nuevos_registros.append(nuevo_partido)
             
-        # Avanzar al siguiente día
         fecha_actual += timedelta(days=1)
         
     if nuevos_registros:
@@ -97,9 +99,9 @@ def actualizar_base():
         df_nuevos = df_nuevos.reindex(columns=df.columns)
         df_final = pd.concat([df, df_nuevos], ignore_index=True)
         df_final.to_csv('Matches.csv', index=False)
-        print(f"Base de datos actualizada con {len(df_nuevos)} partidos.")
+        print(f"Base actualizada con {len(df_nuevos)} partidos de la élite europea.")
     else:
-        print("No hay partidos finalizados nuevos en este rango.")
+        print("No hay partidos finalizados nuevos en este rango para las ligas seleccionadas.")
 
 if __name__ == "__main__":
     actualizar_base()
